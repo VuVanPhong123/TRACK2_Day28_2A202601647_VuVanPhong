@@ -175,8 +175,14 @@ class EventPublisher:
                 "lab28.schema_version": event.schema_version,
             },
         ):
+            # Ingestion events carry the logical replay key. Lifecycle and
+            # processed-batch events do not, so their record key remains the
+            # correlation key supplied by the caller.
+            idempotency_key = (
+                event.idempotency_key if isinstance(event, IngestionEvent) else key
+            )
             headers = integration_tasks.event_headers(
-                current_traceparent() or event.traceparent, key
+                current_traceparent() or event.traceparent, idempotency_key
             )
             headers.append(("schema_version", event.schema_version.encode("utf-8")))
             try:
