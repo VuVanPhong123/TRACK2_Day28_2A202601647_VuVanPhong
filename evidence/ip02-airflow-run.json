@@ -1,9 +1,9 @@
 {
   "dag_id": "lab28_ingestion_pipeline",
-  "dag_run_id": "it-358be933",
+  "dag_run_id": "it-d21f372d",
   "state": "success",
   "conf": {
-    "traceparent": "00-b8d89110c23244588449f592e2f1703b-77a6b2070b3e4ffe-01"
+    "traceparent": "00-74cc9411164547ba9786965f086c8a0d-7fa46fa866964782-01"
   },
   "task_instances": [
     {
@@ -30,19 +30,19 @@
   "asset_events": [
     {
       "uri": "lab28://delta/documents",
-      "timestamp": "2026-09-03T07:34:17.214125Z"
+      "timestamp": "2026-09-03T12:01:22.767973Z"
     },
     {
       "uri": "lab28://delta/feedback",
-      "timestamp": "2026-09-03T07:34:17.215781Z"
+      "timestamp": "2026-09-03T12:01:22.770034Z"
     },
     {
       "uri": "lab28://qdrant/lab28_documents",
-      "timestamp": "2026-09-03T07:34:24.200166Z"
+      "timestamp": "2026-09-03T12:01:33.836736Z"
     },
     {
       "uri": "lab28://feast/asker_activity",
-      "timestamp": "2026-09-03T07:34:28.506575Z"
+      "timestamp": "2026-09-03T12:01:45.671470Z"
     }
   ]
 }

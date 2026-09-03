@@ -11,20 +11,25 @@
     "docker_cli": true,
     "docker_daemon": true,
     "local_nvidia_runtime": false,
-    "real_vllm_endpoint": false
+    "real_vllm_endpoint": true,
+    "real_vllm_version": "0.26.0",
+    "real_vllm_model": "Qwen/Qwen3-4B-Instruct-2507"
   },
   "git": {
     "baseline_commit": "2bafc86eb9f58568253ea298def58df76e467f55",
-    "evidence_source_commit": "b4b6e592f01621780718c0c9050a456723e92ea8",
-    "evidence_runtime_tree": "remediation/day28-live-evidence working tree captured before the source commit; runtime fixes are listed below",
-    "final_sha": "b4b6e592f01621780718c0c9050a456723e92ea8",
+    "pre_gpu_main_commit": "b998964f6943d8a9536c82770c91fa972f687e5f",
+    "evidence_source_commit": "17809f23dc2bc2e9e2651044ecf64b69ea78c096",
+    "evidence_source_commit_status": "runtime evidence captured from this source commit",
+    "final_submission_commit": null,
+    "final_submission_commit_status": "pending PR merge; no SHA is claimed before merge",
     "immutable_v1_tag": "day28-vu-van-phong-v1",
-    "v2_tag": "day28-vu-van-phong-v2"
+    "immutable_v2_tag": "day28-vu-van-phong-v2",
+    "target_v3_tag": "day28-vu-van-phong-v3"
   },
   "fast_static": {
     "fast_suite": {
       "status": "PASS",
-      "result": "91 passed in 3.74s",
+      "result": "93 passed in 9.68s",
       "evidence": "evidence/fast-suite.txt"
     },
     "ruff": "PASS",
@@ -39,19 +44,22 @@
   "runtime_fixes": [
     "Configure UTF-8 stdout with backslash replacement for Windows third-party MLflow output.",
     "Use bounded Retry-After backoff for gateway-throttled operator seed batches.",
-    "Wait for Envoy api upstream health after dependency recovery before the next gateway operation."
+    "Forward LAB28_VLLM_API_KEY from Compose without hard-coding it.",
+    "Use a 15-second Envoy /ready timeout and 2-second recovery interval for remote vLLM latency.",
+    "Flush the real runtime proxy trace boundary without exporting untraced health probes.",
+    "Record urllib HTTPError status codes and timing/count summaries in the load helper."
   ],
   "journeys": {
-    "J1": {"status": "PASS", "result": "12 passed, 3 deselected", "transcript": ".lab28/j1-runtime.txt"},
+    "J1": {"status": "PASS", "result": "15 passed", "transcript": ".lab28/j1-runtime.txt"},
     "J2": {"status": "PASS", "result": "9 passed", "transcript": ".lab28/j2-runtime.txt"},
-    "J3": {"status": "PASS", "result": "6 passed, 3 deselected", "transcript": ".lab28/j3-runtime-final.txt"},
-    "J4": {"status": "PASS", "result": "9 passed, 4 deselected", "transcript": ".lab28/j4-runtime.txt"},
-    "J5": {"status": "PASS - non-GPU local leg", "result": "9 passed, 1 deselected", "transcript": ".lab28/j5-runtime.txt"}
+    "J3": {"status": "PASS - real vLLM serving assertions", "result": "9 passed", "transcript": ".lab28/j3-runtime-final.txt"},
+    "J4": {"status": "PASS - real vLLM recovery assertions", "result": "13 passed", "transcript": ".lab28/j4-runtime.txt"},
+    "J5": {"status": "PASS - serving/trace leg", "result": "10 passed", "transcript": ".lab28/j5-runtime.txt"}
   },
   "integration_suite": {
-    "status": "PASS - non-GPU/non-LangSmith",
-    "result": "56 passed, 16 deselected",
-    "transcript": ".lab28/full-non-gpu-runtime.txt"
+    "status": "PASS - real GPU/non-LangSmith full suite",
+    "result": "71 passed, 1 deselected",
+    "command": "uv run pytest integration-tests -m \"not langsmith\" -q"
   },
   "integration_points": {
     "IP01": {"implementation": "PASS", "live": "PASS", "evidence": "evidence/ip01-kafka-consume.json"},
@@ -60,17 +68,17 @@
     "IP04": {"implementation": "PASS", "live": "PASS", "evidence": "evidence/ip04-feast-online.json"},
     "IP05": {"implementation": "PASS", "live": "PASS", "evidence": "evidence/ip05-qdrant-search.json"},
     "IP06": {"implementation": "PASS", "live": "PASS - registry/promotion/rollback", "evidence": "evidence/ip06-mlflow-release.json; evidence/rollback.json"},
-    "IP07": {"implementation": "PASS", "live": "UNVERIFIED - no real GPU-backed vLLM", "evidence": "evidence/ip07-vllm-identity.json"},
-    "IP08": {"implementation": "PASS", "live": "PASS - non-GPU gateway policy", "evidence": "evidence/ip08-gateway.json"},
-    "IP09": {"implementation": "PASS", "live": "PASS - non-GPU targets/rules/dashboard", "evidence": "evidence/ip09-prometheus-targets.json; evidence/ip09-grafana-dashboards.json"},
-    "IP10": {"implementation": "PASS", "live": "PARTIAL - local asynchronous leg PASS; serving and LangSmith UNVERIFIED", "evidence": "evidence/ip10-trace.json"}
+    "IP07": {"implementation": "PASS", "live": "PASS - real vLLM identity and /api/v1/ask", "evidence": "evidence/ip07-vllm-identity.json"},
+    "IP08": {"implementation": "PASS", "live": "PASS - gateway policy with real serving baseline", "evidence": "evidence/ip08-gateway.json"},
+    "IP09": {"implementation": "PASS", "live": "PASS - all configured targets/rules/dashboard including real vLLM metrics", "evidence": "evidence/ip09-prometheus-targets.json; evidence/ip09-grafana-dashboards.json"},
+    "IP10": {"implementation": "PASS", "live": "PASS - full local serving trace; external LangSmith unverified", "evidence": "evidence/ip10-trace.json"}
   },
   "optional_gates": {
-    "real_vllm": "UNVERIFIED - nvidia-smi unavailable and endpoint unreachable",
+    "real_vllm": "PASS - vLLM 0.26.0, Qwen/Qwen3-4B-Instruct-2507, 111 vLLM metric names",
     "external_langsmith": "UNVERIFIED - LANGSMITH_API_KEY not provided",
-    "load_readiness": "PASS - two real control-plane profiles captured",
-    "load_real_inference": "UNVERIFIED - helper only probes /ready and no vLLM exists",
-    "full_envoy_ejection_gpu_assertion": "UNVERIFIED - GPU-marked test was gated"
+    "load_readiness": "PASS - two readiness/control-plane profiles captured with HTTP status counts",
+    "load_real_inference": "UNVERIFIED - helper intentionally probes /ready, not LLM capacity",
+    "full_envoy_ejection_gpu_assertion": "PASS - real vLLM GPU-marked test passed"
   },
   "kubernetes": {
     "static": "PASS - validator and kubectl kustomize",
@@ -86,8 +94,7 @@
     "evidence/load-profile-16.json"
   ],
   "known_gaps": [
-    "Real GPU-backed vLLM/IP07 and the GPU serving spans remain unverified.",
-    "External LangSmith is unverified because no credential was provided.",
+    "External LangSmith remains unverified because no credential was provided.",
     "Kubernetes and GitOps runtime were not applied without an authorized cluster.",
     "Kubernetes base and Compose use image tags rather than production image digests.",
     "The Kubernetes base does not deploy the complete Kafka/Delta/Feast/Qdrant/MLflow platform.",
