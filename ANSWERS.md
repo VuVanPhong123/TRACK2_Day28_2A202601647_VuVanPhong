@@ -7,9 +7,9 @@ Date: 2026-09-03
 Runtime: Windows, Python 3.11.8, Docker Desktop Engine 28.5.1, full Docker Compose profile.
 Immutable baseline: `2bafc86eb9f58568253ea298def58df76e467f55` / `day28-vu-van-phong-v1`.
 
-The v1 and v2 tags and their commits were preserved. Final GPU remediation is
-being prepared on `remediation/day28-real-vllm`; the exact v3 commit/tag is
-recorded only after the reviewed branch is merged.
+The v1 and v2 tags and their commits were preserved. Final GPU remediation was
+merged by PR #3 at `9101da9ae0623f3697f69e3142535b770bc21f9a`; the provenance
+follow-up records that merge as `final_submission_commit` before v3 is tagged.
 
 ## 1. Architecture and integration points
 

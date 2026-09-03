@@ -20,8 +20,8 @@
     "pre_gpu_main_commit": "b998964f6943d8a9536c82770c91fa972f687e5f",
     "evidence_source_commit": "17809f23dc2bc2e9e2651044ecf64b69ea78c096",
     "evidence_source_commit_status": "runtime evidence captured from this source commit",
-    "final_submission_commit": null,
-    "final_submission_commit_status": "pending PR merge; no SHA is claimed before merge",
+    "final_submission_commit": "9101da9ae0623f3697f69e3142535b770bc21f9a",
+    "final_submission_commit_status": "PR #3 merge commit containing the reviewed submission artifacts; v3 will include this provenance follow-up",
     "immutable_v1_tag": "day28-vu-van-phong-v1",
     "immutable_v2_tag": "day28-vu-van-phong-v2",
     "target_v3_tag": "day28-vu-van-phong-v3"
