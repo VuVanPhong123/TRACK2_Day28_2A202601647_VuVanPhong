@@ -15,11 +15,11 @@
   },
   "git": {
     "baseline_commit": "2bafc86eb9f58568253ea298def58df76e467f55",
-    "evidence_source_commit": "2bafc86eb9f58568253ea298def58df76e467f55",
-    "evidence_runtime_tree": "remediation/day28-live-evidence working tree; runtime fixes are listed below",
-    "final_sha": "2bafc86eb9f58568253ea298def58df76e467f55",
+    "evidence_source_commit": "b4b6e592f01621780718c0c9050a456723e92ea8",
+    "evidence_runtime_tree": "remediation/day28-live-evidence working tree captured before the source commit; runtime fixes are listed below",
+    "final_sha": "b4b6e592f01621780718c0c9050a456723e92ea8",
     "immutable_v1_tag": "day28-vu-van-phong-v1",
-    "v2_tag": "to be created after reviewed merge"
+    "v2_tag": "day28-vu-van-phong-v2"
   },
   "fast_static": {
     "fast_suite": {

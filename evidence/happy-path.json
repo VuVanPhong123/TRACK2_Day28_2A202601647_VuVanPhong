@@ -1,6 +1,6 @@
 {
   "observed_at_utc": "2026-09-03T07:40:41.5235803Z",
-  "evidence_source_commit": "2bafc86eb9f58568253ea298def58df76e467f55",
+  "evidence_source_commit": "b4b6e592f01621780718c0c9050a456723e92ea8",
   "journey": "J1",
   "trace_id": "b8d89110c23244588449f592e2f1703b",
   "request_id": null,
