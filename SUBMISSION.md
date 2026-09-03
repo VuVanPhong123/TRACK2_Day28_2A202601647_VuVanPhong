@@ -20,5 +20,7 @@ uv run pytest tests -q
 uv run pytest integration-tests -m "not gpu and not langsmith" -q
 ```
 
-GPU/LangSmith là gate theo môi trường. Nếu lớp không cấp endpoint/credential, báo
-`UNVERIFIED` và dùng local evidence tương ứng; không giả lập. Xem [rubric](docs/rubric.md).
+GPU evidence was run against the real Kaggle vLLM endpoint and the full
+serving/IP10 assertions passed. LangSmith remains an environment-gated
+`UNVERIFIED` item because no credential was supplied; no fallback or synthetic
+evidence is used. Xem [rubric](docs/rubric.md).

@@ -70,7 +70,12 @@ static_resources:
                   address:
                     socket_address: {address: api, port_value: 8000}
       health_checks:
-        - timeout: 2s
+        # /ready performs the real vLLM identity probe.  A remote GPU tunnel
+        # can take several seconds even when the API is healthy; the shorter
+        # timeout ejected a ready API from Envoy during the GPU run. Keep the
+        # probe interval short so recovery is visible promptly after a
+        # dependency returns.
+        - timeout: 15s
           interval: 2s
           unhealthy_threshold: 1
           healthy_threshold: 1
