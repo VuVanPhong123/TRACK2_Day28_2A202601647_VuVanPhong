@@ -30,7 +30,7 @@ points:
     layer: "L2 Data"
     owner: team-ingestion
     input_contract: "contracts.FeedbackSubmission | contracts.DocumentSubmission (HTTP, via gateway)"
-    output_contract: "contracts.IngestionEvent on topic data.raw, key = idempotency_key"
+    output_contract: "contracts.IngestionEvent on topic data.raw; Kafka record key = entity_id; idempotency_key is preserved in the payload and idempotency-key header"
     health_signal: "Kafka broker reachable; data.raw topic exists with configured retention"
     metrics:
       - lab28_ingestion_events_total
