@@ -10,8 +10,8 @@
     "docker_daemon": false
   },
   "git": {
-    "sha_at_manifest_generation": "3115c55 (audited HEAD; worktree contains the verified changes)",
-    "final_sha": "UNVERIFIED until final commit verification",
+    "evidence_source_commit": "ce714bc",
+    "final_sha": "recorded by final tag verification",
     "tag": "day28-vu-van-phong-v1"
   },
   "fast_static": {
