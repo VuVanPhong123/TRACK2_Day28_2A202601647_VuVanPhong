@@ -23,6 +23,8 @@ import json
 import shutil
 import subprocess
 import sys
+import time
+from contextlib import suppress
 from pathlib import Path
 from typing import Annotated, Any
 
@@ -49,6 +51,44 @@ DEFAULT_PROMPT_TEMPLATE = (
 
 DATA_DIR = Path("data")
 EVIDENCE_DIR = Path("evidence")
+
+
+def _configure_stdout() -> None:
+    """Keep third-party operator messages safe on Windows consoles.
+
+    MLflow writes a Unicode progress marker when a run ends.  PowerShell can
+    expose a CP1252 ``sys.stdout`` even though the rest of this CLI emits
+    UTF-8 JSON.  Reconfiguring the text wrapper once at the process boundary
+    prevents that informational write from turning a successful release into
+    a failed command.
+    """
+    reconfigure = getattr(sys.stdout, "reconfigure", None)
+    if reconfigure is not None:
+        with suppress(OSError, ValueError):
+            reconfigure(encoding="utf-8", errors="backslashreplace")
+
+
+def _post_with_rate_limit_backoff(client: Any, path: str, payload: Any) -> Any:
+    """Retry bulk-seed requests that the gateway throttles.
+
+    The seed command is a bounded operator batch, so it can wait for the
+    gateway's token bucket to refill without weakening the gateway policy for
+    normal callers.  A finite retry count keeps a persistent refusal visible.
+    """
+    max_retries = 5
+    for attempt in range(max_retries + 1):
+        response = client.post(path, json=payload)
+        if response.status_code != 429 or attempt == max_retries:
+            return response
+
+        retry_after = response.headers.get("retry-after", "1")
+        try:
+            delay = max(float(retry_after), 0.1)
+        except ValueError:
+            delay = 1.0
+        time.sleep(delay)
+
+    raise AssertionError("unreachable")
 
 
 def _emit(payload: Any) -> None:
@@ -226,7 +266,7 @@ def seed(
             selected = rows[:limit] if limit else rows
             accepted[kind], rejected[kind] = [], []
             for row in selected:
-                response = client.post(f"/api/v1/{kind}", json=row)
+                response = _post_with_rate_limit_backoff(client, f"/api/v1/{kind}", row)
                 target = accepted if response.status_code == 202 else rejected
                 target[kind].append(
                     response.json()
@@ -632,6 +672,7 @@ def evidence(
 
 
 def main() -> None:
+    _configure_stdout()
     app()
 
 

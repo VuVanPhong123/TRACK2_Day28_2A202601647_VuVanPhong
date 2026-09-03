@@ -120,18 +120,39 @@ def compose(*args: str, timeout: float = 180.0) -> subprocess.CompletedProcess[s
     )
 
 
+def _gateway_api_healthy() -> bool:
+    """Return whether Envoy has put the API upstream back into rotation."""
+    admin_url = env("LAB28_GATEWAY_ADMIN_URL", "http://localhost:9901").rstrip("/")
+    response = httpx.get(f"{admin_url}/clusters", timeout=HTTP_TIMEOUT)
+    response.raise_for_status()
+    return any(
+        line.startswith("api::") and line.endswith("::health_flags::healthy")
+        for line in response.text.splitlines()
+    )
+
+
 @contextmanager
 def dependency_down(service: str) -> Iterator[None]:
     """Stop one container for the duration of the block, then start it again.
 
     ``finally`` is load-bearing: a failed assertion inside the block must still
-    restore the stack, or one red test cascades into every test after it.
+    restore the stack, or one red test cascades into every test after it.  A
+    container being started is not the same signal as its API being routable:
+    Envoy needs one active health check after the dependency recovers.  Waiting
+    for that control-plane signal prevents the next test from racing the
+    gateway's ejection state.
     """
     compose("stop", service)
     try:
         yield
     finally:
         compose("start", service)
+        wait_until(
+            f"Envoy to restore the API upstream after {service} recovery",
+            _gateway_api_healthy,
+            timeout=180.0,
+            interval=1.0,
+        )
 
 
 # --------------------------------------------------------------------------

@@ -1,0 +1,17 @@
+{
+  "model_name": "lab28-rag-release",
+  "previous_champion": "3",
+  "promoted_champion": "9",
+  "promoted_run_id": "79ebc5f763534c8ea4d8f2a1f8d94eaa",
+  "promoted_prompt_version": "it-j3-dbe3a594",
+  "rollback_target": "3",
+  "final_champion": "3",
+  "assertions": {
+    "promotion_created_new_version": true,
+    "provenance_tags_present": true,
+    "serving_resolution_followed_promoted_alias": null,
+    "serving_resolution_followed_rollback_alias": null,
+    "serving_assertion_reason": "Serving-following-alias tests are GPU-marked and were skipped without real vLLM; registry resolve and alias rollback assertions passed."
+  },
+  "source_test": "integration-tests/test_j3_promotion_rollback.py"
+}

@@ -1,141 +1,170 @@
-# Day 28 Track 2 — Answers
+# Day 28 Track 2 - Answers
 
-Student: Vu Van Phong<br>
-Mode: Individual<br>
-Repository: https://github.com/VuVanPhong123/TRACK2_Day28_2A202601647_VuVanPhong<br>
-Final commit/tag: được xác minh ở bước final Git; tag dự kiến `day28-vu-van-phong-v1`<br>
-Date: 2026-09-03<br>
-Environment profile: `browser-fallback` — Python 3.11.8, Docker CLI có nhưng daemon không chạy.
+Student: Vu Van Phong
+Mode: Individual
+Repository: https://github.com/VuVanPhong123/TRACK2_Day28_2A202601647_VuVanPhong
+Date: 2026-09-03
+Runtime: Windows, Python 3.11.8, Docker Desktop Engine 28.5.1, full Docker Compose profile.
+Immutable baseline: `2bafc86eb9f58568253ea298def58df76e467f55` / `day28-vu-van-phong-v1`.
 
-## 1. Architecture và 10 integration points
+The v1 tag and its commit were preserved. Remediation is being prepared on
+`remediation/day28-live-evidence`; the final v2 commit/tag is recorded after
+the reviewed branch is merged.
 
-Luồng chính là gateway → FastAPI → Kafka → Airflow/Spark → Delta. Delta cấp dữ liệu
-cho Feast và Qdrant; MLflow giữ release/champion; API gọi vLLM cho serving. Prometheus,
-Grafana và OTLP/Jaeger theo dõi các boundary. Sở hữu và file triển khai được tổng hợp
-ở [submission architecture](docs/submission-architecture.md).
+## 1. Architecture and integration points
 
-## 2. Kafka record key và idempotency key
+The live path is Envoy -> FastAPI -> Kafka -> Airflow/Spark -> Delta Lake.
+Delta feeds Feast and Qdrant; MLflow holds the release/champion; the API uses
+vLLM for the optional GPU serving leg. Prometheus, Grafana, OTLP Collector and
+Jaeger observe the boundaries. Ownership and the diagram are in
+[docs/submission-architecture.md](docs/submission-architecture.md).
 
-Kafka record key là `event.entity_id`, để mọi sự kiện của một asker đi cùng partition
-và giữ ordering theo entity. `event.idempotency_key` được giữ trong JSON payload và
-header `idempotency-key`. `EventPublisher` vẫn encode record key riêng, nhưng truyền
-đúng idempotency key vào header. Phần prose IP01 của matrix đã được đồng bộ với hành vi
-đó; không đổi ID, test hay scoring.
+The implementation uses `event.entity_id` as the Kafka record key for ordering
+per asker. `event.idempotency_key` remains in the payload and in the
+`idempotency-key` header. The live IP01 artifact verifies that these values are
+distinct fields with the intended relationship.
 
-## 3. At-least-once và Delta MERGE
+## 2. Live journey results
 
-Producer dùng `acks=all`, idempotence và flush; consumer chỉ commit offset sau khi
-Delta xử lý thành công. `dedupe_latest` đọc iterable một lần, dedupe theo
-`idempotency_key`, chọn max `(occurred_at, event_id)` và trả thứ tự deterministic để
-Spark MERGE không nhận duplicate source rows. Logic được chứng minh bởi
-`evidence/fast-suite.txt` và `tests/test_delta_merge_idempotency.py`.
+- J1: PASS - `12 passed, 3 deselected`; Airflow run `it-358be933`, trace
+  `b8d89110c23244588449f592e2f1703b`, Delta feedback v22 and documents v13.
+- J2: PASS - `9 passed`; latest replay used asker `it-j2-80a282bf`, three Kafka
+  deliveries at offsets 43, 44 and 45, and one durable Delta row / one Qdrant
+  point after replay.
+- J3: PASS - `6 passed`; MLflow version 9 was promoted from champion v3 with
+  run `79ebc5f763534c8ea4d8f2a1f8d94eaa`, then the alias was rolled back to v3.
+- J4: PASS - `9 passed, 4 deselected`; Feast degradation, Qdrant mandatory
+  failure/recovery, poison parking, valid replay and no duplicate row were
+  observed. The recovery artifact contains the actual DLQ coordinates and run
+  IDs.
+- J5: PASS for the non-GPU local leg - `9 passed, 1 deselected`; the trace
+  `3b3c0150af7b4c6c8ff3019951b4f95b` crosses gateway, API, Kafka, Airflow and
+  Spark. Serving/vLLM spans remain gated by the absent real endpoint.
 
-## 4. Replay và idempotency
+The full command `uv run pytest integration-tests -m "not gpu and not langsmith" -vv`
+also passed: `56 passed, 16 deselected`. A recovery race in the test utility was
+fixed by waiting for Envoy's live `health_flags::healthy` signal after a
+dependency restart; no assertion or marker was weakened.
 
-Replay cùng logical fact giữ nguyên `idempotency_key`; Delta update matched row thay vì
-append. Qdrant dùng UUID deterministic từ `doc_id`, nên replay không tạo point mới.
-Live J2 chưa chạy vì Docker daemon không khả dụng: `UNVERIFIED`.
+## 3. Kafka, at-least-once delivery and idempotency
 
-## 5. Feast offline/online và freshness
+The producer uses `acks=all`, idempotence and flush. Consumers commit offsets
+only after durable processing. Delta collapses duplicate source rows before
+`MERGE`; later redelivery matches the same idempotency key. Qdrant uses a
+deterministic point ID derived from `doc_id`. J2's live result is recorded in
+[evidence/no-data-loss.json](evidence/no-data-loss.json).
 
-Snapshot offline được tạo từ Delta export. Online request dùng `FEATURE_REFS` từ
-`contracts.py`, entity `asker_id` và `full_feature_names=false`. Feast là dependency
-optional của serving: lỗi/missing feature hiển thị `degraded`, không làm pod mất
-rotation. Live materialization/freshness evidence: `UNVERIFIED`.
+## 4. Feast and Qdrant
 
-## 6. Qdrant deterministic IDs và retrieval
+J1 served Feast entity `it-j1-24b4124e` through `asker_serving_v1` with all
+features present and Delta version 22. The Qdrant evidence contains collection
+`lab28_documents`, 23 points, five retrieval results and the pinned embedding
+identity:
+`sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2@faf4aa4225822f3bc6376869cb1164e8e3feedd0`.
 
-Documents được embed dense+sparse và upsert vào collection `lab28_documents`; point ID
-là UUID5 deterministic từ `doc_id`, retrieval dùng hybrid RRF. Live collection/search
-evidence: `UNVERIFIED`.
+Feast is optional in serving and is reported as `degraded` when unavailable.
+Qdrant is mandatory for readiness and is reported as `not_ready` / HTTP 503
+when unavailable. The API can still return a flagged direct request during a
+mandatory dependency outage, but the gateway removes an unready upstream.
 
-## 7. MLflow release/champion/rollback
+## 5. MLflow release and rollback
 
-Release lưu prompt/config, signature, tags và provenance; alias `champion` là version
-được serving resolve. J3 phải kiểm tra promoted version rồi resolve lại previous
-champion sau rollback. MLflow runtime và rollback evidence: `UNVERIFIED`.
+The registered model is `lab28-rag-release`. The current champion is v3 with
+run `a98ca59bd52f41cdb14a323666d93878`. J3 promoted v9 with provenance tags
+for prompt, vLLM model, embedding model, Qdrant collection, Feast service and
+Delta version, then restored champion v3. See
+[evidence/ip06-mlflow-release.json](evidence/ip06-mlflow-release.json) and
+[evidence/rollback.json](evidence/rollback.json).
 
-## 8–9. `ready`, `degraded`, `not_ready` và dependency severity
+## 6. Readiness and recovery semantics
 
-`/health` là liveness, không chạm dependency; `/ready` là dependency-aware. Kafka,
-MLflow và Qdrant là mandatory; Feast optional; vLLM trở thành mandatory khi
-`LAB28_VLLM_REQUIRE_REAL=true`. `readiness_status` ưu tiên mọi mandatory failure thành
-`not_ready`, optional failure thành `degraded`, còn lại `ready`; iterable rỗng là
-`ready`.
+`/health` is liveness and remains independent of dependency probes. `/ready`
+returns HTTP 503 only for a mandatory failure. Kafka, MLflow and Qdrant are
+mandatory; Feast is degradable; vLLM becomes mandatory when
+`LAB28_VLLM_REQUIRE_REAL=true`. The local Compose API therefore reports
+`degraded` because vLLM is absent, while its Kafka, MLflow, Qdrant and Feast
+components are healthy.
 
-## 10. Failure, recovery và no-data-loss
+J4 stopped and restarted real Compose services. The successful record is in
+[evidence/failure-recovery.md](evidence/failure-recovery.md). The full
+GPU-marked Envoy-ejection assertion was not claimed because the environment
+has no real vLLM; Envoy's configured active check is `/ready` and its recovered
+admin state was healthy.
 
-Thiết kế recovery là retry bounded → DLQ cho poison message → operator replay sau khi
-sửa lỗi; offset không commit trước durable processing. J2/J4 cần chứng minh counts,
-versions, offsets và replay IDs trước/sau. Do không có stack runtime, failure/recovery
-và no-data-loss live artifacts: `UNVERIFIED`.
+## 7. Trace, metrics and gateway
 
-## 11. Trace continuity
+The non-GPU J5 path proved W3C trace continuity across HTTP, Kafka and the
+asynchronous Airflow/Spark path; collector export failures were zero. The
+Prometheus/Grafana tests passed: all non-GPU component targets were up, alert
+rules loaded/evaluated, and the provisioned `Lab 28 Platform Overview`
+dashboard used the Prometheus datasource. The optional vLLM target is down by
+design until a real GPU endpoint exists.
 
-W3C `traceparent` đi qua HTTP, Kafka headers và OTLP spans. `event_headers` bỏ header
-trace khi giá trị rỗng nhưng luôn gửi `idempotency-key`; trace ID không bị thay đổi qua
-async boundary. Local collector/Jaeger path có trong `monitoring/otel-collector.yaml`,
-nhưng live trace query chưa chạy: `UNVERIFIED`.
+Gateway evidence records configured 10 RPS, HTTP 200 and HTTP 429 samples,
+`x-request-id` on both, and Envoy rate-limit statistics. The public `/healthz`
+route is answered by Envoy itself.
 
-## 12. Golden signals và alerts
+## 8. Performance profile
 
-API/gateway expose rate, error và duration; readiness/component gauges, Kafka exporter,
-collector metrics và vLLM metrics được scrape theo `monitoring/prometheus.yml`.
-`monitoring/alerts.yml` có alert API unavailable và high error ratio. Static config pass;
-Prometheus/Grafana runtime: `UNVERIFIED`.
+`load-tests/run_profile.py` only requests `/ready`, so these are readiness /
+control-plane profiles, not LLM inference benchmarks:
 
-## 13. Performance
+- 8 workers, 200 requests: 21 HTTP 200 and 179 helper status `0`; P50/P95/P99
+  4.80 / 380.72 / 494.48 ms.
+- 16 workers, 200 requests: 13 HTTP 200 and 187 helper status `0`; P50/P95/P99
+  6.91 / 580.07 / 758.97 ms.
 
-P50/P95/P99 của readiness hoặc `/api/v1/ask`: `UNVERIFIED` — không có gateway listener
-vì Docker daemon không chạy. Vì vậy chưa tuyên bố throughput inference, hardware
-capacity hay bottleneck runtime. `load-tests/run_profile.py` hiện là readiness/control-
-plane probe, không phải benchmark LLM serving; cần chạy lại với 8 và 16 workers trên
-stack thật trước khi báo số liệu.
+The helper maps urllib exceptions (including Envoy's 429 rate-limit response)
+to status `0`; it does not expose throughput. The dominant bottleneck in this
+measurement is the intentional 10 RPS edge token bucket, not model execution.
+Raw outputs are [load-profile-8.json](evidence/load-profile-8.json) and
+[load-profile-16.json](evidence/load-profile-16.json).
 
-## 14. Kubernetes/GitOps
+## 9. GPU/vLLM and LangSmith gates
 
-Kubernetes static validation: `PASS` qua `scripts/validate_manifests.py` và
-`kubectl kustomize deploy/kubernetes/base`. `kubectl apply --dry-run=client` không thể
-hoàn tất vì client cố lấy OpenAPI từ API server không chạy; không apply live. GitOps
-runtime: `UNVERIFIED`. `gitops/application.yaml` đã trỏ repo cá nhân và immutable tag
-dự kiến, nhưng tag chỉ có sau final commit.
+`nvidia-smi` is unavailable locally. The generated IP07 identity is
+`reachable: false`, `is_real_vllm: false`, so IP07 is `UNVERIFIED`; no mock or
+CPU classifier is used as evidence. The Kaggle extension specifies a T4 path
+with the current `vllm==0.26.0` guide; it requires the user to run the notebook
+with Internet/GPU and return only the public endpoint/model details if this
+optional gate is needed. Do not send repository credentials or ngrok tokens.
 
-## 15. GPU/vLLM
+External LangSmith is also `UNVERIFIED` because no credential was provided.
+Local OTLP/Jaeger is proven for the non-GPU asynchronous leg; serving spans
+are absent because the real inference leg was not run.
 
-`UNVERIFIED` — chưa có GPU-backed vLLM endpoint được xác minh. Không dùng mock/CPU
-classifier làm bằng chứng IP07 và không tạo `ip07-vllm-identity.json` giả.
+## 10. Kubernetes/GitOps
 
-## 16. Local OTLP và external LangSmith
+`scripts/validate_manifests.py` and `kubectl kustomize deploy/kubernetes/base`
+both pass. `kubectl config current-context` reports no current context, so
+Kubernetes runtime and GitOps runtime are `UNVERIFIED`; no live apply was run.
+The existing v1 GitOps reference remains untouched until the final reviewed
+v2 commit is known, then `gitops/application.yaml` is updated to
+`refs/tags/day28-vu-van-phong-v2`.
 
-Local OTLP/Jaeger là path offline được cấu hình; runtime chưa chạy nên `UNVERIFIED`.
-External LangSmith là optional và `UNVERIFIED` vì chưa có `LANGSMITH_API_KEY`; không
-fake project/export.
+## 11. Static verification and known gaps
 
-## 17. Production gaps đã xác nhận từ source
+- Fast suite: `91 passed`; [evidence/fast-suite.txt](evidence/fast-suite.txt).
+- Ruff, matrix (245 checks), portability and manifest validation: PASS.
+- Basic and full Compose config validation and runtime smoke: PASS.
+- `lab28 integration` intentionally exits 1 in this environment: its
+  process-level report has 5/6 verified points passing, four outside-process
+  points unverified, and IP07 `not_ready`. The external test evidence above is
+  the source for those outside-process points; the report was not manually
+  turned green.
+- `verify_starter_state.py` remains a pre-implementation scaffold check and is
+  not applicable after the four integration tasks are implemented; the
+  corresponding starter tests pass.
 
-- Compose/Kubernetes dùng image tags thay vì immutable image digests.
-- K8s base chỉ mô tả API/gateway và tham chiếu dependency service; không phải full
-  Kafka/Delta/Feast/Qdrant/MLflow deployment.
-- Compose có Grafana credential dev `admin/admin`; không phù hợp production secret
-  management.
-- Envoy config có routing/rate limit nhưng chưa có gateway authentication/TLS.
-- Chưa có persistent backup/restore evidence và remote GPU tunnel lifecycle.
-- Chưa có production-capacity evidence cho real inference.
-
-## Verification summary
-
-- Fast suite: `PASS` — 88 tests, transcript tại `evidence/fast-suite.txt`.
-- Ruff: `PASS`.
-- Matrix: `PASS` — 245 checks; `tests/test_integration_matrix.py`: 2 passed.
-- Portability: `PASS`.
-- Manifest validator: `PASS`.
-- Compose basic/full/GPU config: `PASS` (static only).
-- Basic/full Docker, J1–J5, IP01–IP10 live evidence, load runtime: `UNVERIFIED` vì
-  Docker daemon không chạy.
+Remaining production gaps are immutable image digests, full dependency
+deployment in Kubernetes, production secret management/TLS/authentication,
+backup/restore and capacity evidence for real inference, the real GPU vLLM
+gate, and external LangSmith.
 
 ## Contribution
 
-Vu Van Phong completed and verified the implementation, integration, evidence,
-documentation and submission work in this individual repository.
-
-Không commit secret, runtime DB/state, model weights/cache; không fake evidence.
+This is an individual submission by Vu Van Phong. Runtime fixes were limited to
+the Windows-safe CLI stdout boundary, bounded gateway 429 backoff for the
+operator seed batch, and control-plane synchronization after dependency
+recovery. No secret, `.env`, database, cache, model weight or `.lab28/` runtime
+state is intended for commit.
