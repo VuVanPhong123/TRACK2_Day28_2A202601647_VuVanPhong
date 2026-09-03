@@ -9,6 +9,12 @@ receivers:
 processors:
   batch:
     timeout: 1s
+  batch/traces:
+    # Process-boundary spans must be queryable when the serving response is
+    # asserted.  The proxy flushes its OTLP exporter before returning, so do
+    # not add another collector-side batch delay on the trace pipeline.
+    send_batch_size: 1
+    timeout: 1s
   memory_limiter:
     check_interval: 1s
     limit_mib: 256
@@ -38,7 +44,7 @@ service:
   pipelines:
     traces:
       receivers: [otlp]
-      processors: [memory_limiter, batch]
+      processors: [memory_limiter, batch/traces]
       exporters: [otlp/jaeger, debug]
     metrics:
       receivers: [otlp]

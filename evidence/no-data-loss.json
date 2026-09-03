@@ -1,48 +1,48 @@
 {
-  "observed_at_utc": "2026-09-03T07:40:41.5235803Z",
+  "observed_at_utc": "2026-09-03T11:57:06.277597Z",
   "sources": [
     "integration-tests/test_j2_idempotent_replay.py",
     "integration-tests/test_j4_degraded_recovery.py",
     "evidence/ip03-delta-history.json"
   ],
   "J2_idempotent_replay": {
-    "asker_id": "it-j2-80a282bf",
-    "document_id": "it-j2-doc-80a282bf",
-    "idempotency_key": "fb:it-j2-80a282bf:eeabfbadf8f6c217b92dd08942f49178",
+    "asker_id": "it-j2-2d5f2656",
+    "document_id": "it-j2-doc-2d5f2656",
+    "idempotency_key": "fb:it-j2-2d5f2656:f5fdfc5f2b380cd621f60595b79737de",
     "deliveries_on_kafka": 3,
     "delivery_coordinates": [
-      {"partition": 1, "offset": 43},
-      {"partition": 1, "offset": 44},
-      {"partition": 1, "offset": 45}
+      {"partition": 1, "offset": 57},
+      {"partition": 1, "offset": 58},
+      {"partition": 1, "offset": 59}
     ],
-    "first_run": {"dag_run_id": "it-edad8eaa", "state": "success"},
-    "replay_run": {"dag_run_id": "it-b0090cf5", "state": "success"},
-    "feedback_delta_version_after_first": 23,
-    "feedback_delta_version_after_replay": 24,
+    "first_run": {"dag_run_id": "it-115701e4", "state": "success"},
+    "replay_run": {"dag_run_id": "it-c68fd8f0", "state": "success"},
+    "feedback_delta_version_after_first": 45,
+    "feedback_delta_version_after_replay": 47,
     "rows_for_fact_after_replay": 1,
     "qdrant_points_for_document_after_replay": 1
   },
   "J4_failure_recovery": {
-    "good_asker_id": "it-j4-9c14a0b5",
+    "good_asker_id": "it-j4-faf61031",
     "good_rows_after_recovery": 1,
-    "poison_key": "it-j4-poison-9c14a0b5",
+    "poison_key": "it-j4-poison-faf61031",
     "poison_topic": "data.raw",
-    "poison_partition": 0,
-    "poison_offset": 29,
+    "poison_partition": 1,
+    "poison_offset": 53,
     "poison_dlq_category": "validation",
     "poison_dlq_attempts": 1,
-    "poison_batch_run_id": "it-ce528fba",
-    "replay_asker_id": "it-j4-replay-332effd0",
-    "replay_run_id": "it-6186051d",
+    "poison_batch_run_id": "it-c7381f6b",
+    "replay_asker_id": "it-j4-replay-ae4b1b4b",
+    "replay_run_id": "it-62b74716",
     "replayed_rows": 1,
-    "recovery_readiness": "baseline HTTP 200 / degraded with mandatory Qdrant ready"
+    "recovery_readiness": "final real-vLLM baseline HTTP 200 / ready with mandatory Qdrant ready"
   },
   "durable_store_snapshot": {
-    "feedback_delta_version": 24,
-    "feedback_delta_rows": 31,
+    "feedback_delta_version": 47,
+    "feedback_delta_rows": 53,
     "qdrant_collection": "lab28_documents",
-    "qdrant_points": 23,
-    "dead_letter_count_observed": 6
+    "qdrant_points": 30,
+    "dead_letter_count_observed": 8
   },
   "conclusion": {
     "replay_occurred": true,

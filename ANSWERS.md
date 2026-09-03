@@ -7,9 +7,9 @@ Date: 2026-09-03
 Runtime: Windows, Python 3.11.8, Docker Desktop Engine 28.5.1, full Docker Compose profile.
 Immutable baseline: `2bafc86eb9f58568253ea298def58df76e467f55` / `day28-vu-van-phong-v1`.
 
-The v1 tag and its commit were preserved. Remediation is being prepared on
-`remediation/day28-live-evidence`; the final v2 commit/tag is recorded after
-the reviewed branch is merged.
+The v1 and v2 tags and their commits were preserved. Final GPU remediation is
+being prepared on `remediation/day28-real-vllm`; the exact v3 commit/tag is
+recorded only after the reviewed branch is merged.
 
 ## 1. Architecture and integration points
 
@@ -26,25 +26,25 @@ distinct fields with the intended relationship.
 
 ## 2. Live journey results
 
-- J1: PASS - `12 passed, 3 deselected`; Airflow run `it-358be933`, trace
-  `b8d89110c23244588449f592e2f1703b`, Delta feedback v22 and documents v13.
-- J2: PASS - `9 passed`; latest replay used asker `it-j2-80a282bf`, three Kafka
-  deliveries at offsets 43, 44 and 45, and one durable Delta row / one Qdrant
+- J1: PASS - `15 passed`; Airflow run `it-b5d0ad87`, trace
+  `809124c5d6164177961d8aac998687c8`, Delta feedback v41 and documents v21.
+- J2: PASS - `9 passed`; latest replay used asker `it-j2-2d5f2656`, three Kafka
+  deliveries at offsets 57, 58 and 59, and one durable Delta row / one Qdrant
   point after replay.
-- J3: PASS - `6 passed`; MLflow version 9 was promoted from champion v3 with
-  run `79ebc5f763534c8ea4d8f2a1f8d94eaa`, then the alias was rolled back to v3.
-- J4: PASS - `9 passed, 4 deselected`; Feast degradation, Qdrant mandatory
+- J3: PASS - GPU promotion/rollback assertions passed; MLflow version 15 was
+  promoted from champion v3 with run `d8a464e2a6e6478482aef0e901bea4b4`, then
+  the alias was rolled back to v3.
+- J4: PASS - `13 passed`; Feast degradation, Qdrant mandatory
   failure/recovery, poison parking, valid replay and no duplicate row were
   observed. The recovery artifact contains the actual DLQ coordinates and run
   IDs.
-- J5: PASS for the non-GPU local leg - `9 passed, 1 deselected`; the trace
-  `3b3c0150af7b4c6c8ff3019951b4f95b` crosses gateway, API, Kafka, Airflow and
-  Spark. Serving/vLLM spans remain gated by the absent real endpoint.
+- J5/IP10: PASS - `14 passed, 1 skipped`; the local trace crosses gateway, API,
+  Kafka, Airflow, Spark, and the transparent runtime vLLM proxy. The only
+  skipped test is the external LangSmith credential gate.
 
-The full command `uv run pytest integration-tests -m "not gpu and not langsmith" -vv`
-also passed: `56 passed, 16 deselected`. A recovery race in the test utility was
-fixed by waiting for Envoy's live `health_flags::healthy` signal after a
-dependency restart; no assertion or marker was weakened.
+The real-GPU command `uv run pytest integration-tests -m "gpu and not langsmith"
+-vv` passed `15` tests. A remote-readiness timeout and recovery interval were
+fixed in Envoy configuration; no assertion, marker, skip, or xfail was changed.
 
 ## 3. Kafka, at-least-once delivery and idempotency
 
@@ -56,9 +56,9 @@ deterministic point ID derived from `doc_id`. J2's live result is recorded in
 
 ## 4. Feast and Qdrant
 
-J1 served Feast entity `it-j1-24b4124e` through `asker_serving_v1` with all
-features present and Delta version 22. The Qdrant evidence contains collection
-`lab28_documents`, 23 points, five retrieval results and the pinned embedding
+J1 served Feast entity `it-j1-dbfc0c12` through `asker_serving_v1` with all
+features present and Delta version 41. The Qdrant evidence contains collection
+`lab28_documents`, 29 points, five retrieval results and the pinned embedding
 identity:
 `sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2@faf4aa4225822f3bc6376869cb1164e8e3feedd0`.
 
@@ -70,7 +70,7 @@ mandatory dependency outage, but the gateway removes an unready upstream.
 ## 5. MLflow release and rollback
 
 The registered model is `lab28-rag-release`. The current champion is v3 with
-run `a98ca59bd52f41cdb14a323666d93878`. J3 promoted v9 with provenance tags
+run `a98ca59bd52f41cdb14a323666d93878`. J3 promoted v15 with provenance tags
 for prompt, vLLM model, embedding model, Qdrant collection, Feast service and
 Delta version, then restored champion v3. See
 [evidence/ip06-mlflow-release.json](evidence/ip06-mlflow-release.json) and
@@ -81,24 +81,23 @@ Delta version, then restored champion v3. See
 `/health` is liveness and remains independent of dependency probes. `/ready`
 returns HTTP 503 only for a mandatory failure. Kafka, MLflow and Qdrant are
 mandatory; Feast is degradable; vLLM becomes mandatory when
-`LAB28_VLLM_REQUIRE_REAL=true`. The local Compose API therefore reports
-`degraded` because vLLM is absent, while its Kafka, MLflow, Qdrant and Feast
-components are healthy.
+`LAB28_VLLM_REQUIRE_REAL=true`. The final runtime had all components ready,
+including the real remote vLLM identity probe through the local transparent
+proxy.
 
 J4 stopped and restarted real Compose services. The successful record is in
-[evidence/failure-recovery.md](evidence/failure-recovery.md). The full
-GPU-marked Envoy-ejection assertion was not claimed because the environment
-has no real vLLM; Envoy's configured active check is `/ready` and its recovered
-admin state was healthy.
+[evidence/failure-recovery.md](evidence/failure-recovery.md). The GPU-marked
+Envoy-ejection and recovery assertions passed with the real serving baseline;
+Envoy's active check is `/ready`, with a 15-second timeout and 2-second
+recovery interval for the remote GPU latency.
 
 ## 7. Trace, metrics and gateway
 
-The non-GPU J5 path proved W3C trace continuity across HTTP, Kafka and the
-asynchronous Airflow/Spark path; collector export failures were zero. The
-Prometheus/Grafana tests passed: all non-GPU component targets were up, alert
-rules loaded/evaluated, and the provisioned `Lab 28 Platform Overview`
-dashboard used the Prometheus datasource. The optional vLLM target is down by
-design until a real GPU endpoint exists.
+The J5/IP10 path proved W3C trace continuity across HTTP, Kafka, Airflow/Spark,
+and the real serving leg; collector export failures were zero. The
+Prometheus/Grafana tests passed: all component targets, including the vLLM
+proxy target, were up, alert rules loaded/evaluated, and the provisioned
+`Lab 28 Platform Overview` dashboard used the Prometheus datasource.
 
 Gateway evidence records configured 10 RPS, HTTP 200 and HTTP 429 samples,
 `x-request-id` on both, and Envoy rate-limit statistics. The public `/healthz`
@@ -109,62 +108,66 @@ route is answered by Envoy itself.
 `load-tests/run_profile.py` only requests `/ready`, so these are readiness /
 control-plane profiles, not LLM inference benchmarks:
 
-- 8 workers, 200 requests: 21 HTTP 200 and 179 helper status `0`; P50/P95/P99
-  4.80 / 380.72 / 494.48 ms.
-- 16 workers, 200 requests: 13 HTTP 200 and 187 helper status `0`; P50/P95/P99
-  6.91 / 580.07 / 758.97 ms.
+- 8 workers, 200 requests: 11 HTTP 200, 151 HTTP 429 rejected, 37 HTTP 503
+  errors, and 1 transport status `0`; elapsed 19.48s, throughput 10.27 req/s,
+  P50/P95/P99 20.13 / 7249.60 / 8911.65 ms.
+- 16 workers, 200 requests: 186 HTTP 429 rejected and 14 HTTP 503 errors;
+  elapsed 493.74ms, throughput 405.07 req/s, P50/P95/P99 34.33 / 60.88 /
+  66.14 ms.
 
-The helper maps urllib exceptions (including Envoy's 429 rate-limit response)
-to status `0`; it does not expose throughput. The dominant bottleneck in this
-measurement is the intentional 10 RPS edge token bucket, not model execution.
+The helper records `HTTPError.code` as the actual HTTP status; only transport
+exceptions become status `0`, and it reports elapsed time, throughput, and
+success/rejected/error counts. The dominant bottleneck is the intentional
+10-RPS edge token bucket and readiness control plane, not model execution.
 Raw outputs are [load-profile-8.json](evidence/load-profile-8.json) and
 [load-profile-16.json](evidence/load-profile-16.json).
 
 ## 9. GPU/vLLM and LangSmith gates
 
-`nvidia-smi` is unavailable locally. The generated IP07 identity is
-`reachable: false`, `is_real_vllm: false`, so IP07 is `UNVERIFIED`; no mock or
-CPU classifier is used as evidence. The Kaggle extension specifies a T4 path
-with the current `vllm==0.26.0` guide; it requires the user to run the notebook
-with Internet/GPU and return only the public endpoint/model details if this
-optional gate is needed. Do not send repository credentials or ngrok tokens.
+The generated IP07 identity is `reachable: true`, `version: 0.26.0`, served
+model `Qwen/Qwen3-4B-Instruct-2507`, `vllm_metric_count: 111`, and
+`is_real_vllm: true`. The full serving request returned HTTP 200 through
+`/api/v1/ask` and used the same configured model identity. The tunnel and key
+were session-only; neither is stored in the repository.
 
 External LangSmith is also `UNVERIFIED` because no credential was provided.
-Local OTLP/Jaeger is proven for the non-GPU asynchronous leg; serving spans
-are absent because the real inference leg was not run.
+Local OTLP/Jaeger is proven for the full local serving trace. The external
+LangSmith exporter remains `UNVERIFIED` because no credential was provided.
 
 ## 10. Kubernetes/GitOps
 
 `scripts/validate_manifests.py` and `kubectl kustomize deploy/kubernetes/base`
 both pass. `kubectl config current-context` reports no current context, so
 Kubernetes runtime and GitOps runtime are `UNVERIFIED`; no live apply was run.
-The existing v1 GitOps reference remains untouched until the final reviewed
-v2 commit is known, then `gitops/application.yaml` is updated to
-`refs/tags/day28-vu-van-phong-v2`.
+The existing v1 and v2 GitOps references remain untouched. The reviewed final
+branch updates `gitops/application.yaml` to
+`refs/tags/day28-vu-van-phong-v3`; no live apply was run.
 
 ## 11. Static verification and known gaps
 
-- Fast suite: `91 passed`; [evidence/fast-suite.txt](evidence/fast-suite.txt).
+- Fast suite: `93 passed`; [evidence/fast-suite.txt](evidence/fast-suite.txt).
 - Ruff, matrix (245 checks), portability and manifest validation: PASS.
 - Basic and full Compose config validation and runtime smoke: PASS.
-- `lab28 integration` intentionally exits 1 in this environment: its
-  process-level report has 5/6 verified points passing, four outside-process
-  points unverified, and IP07 `not_ready`. The external test evidence above is
-  the source for those outside-process points; the report was not manually
-  turned green.
+- Full `uv run pytest integration-tests -m "not langsmith" -q`: `71 passed, 1
+  deselected` (the external LangSmith gate).
+- `lab28 integration` returns a ready report with 6/6 process-level points
+  passing and score 100. Outside-process evidence files provide the runtime
+  proof for IP01/IP02/IP04/IP08/IP09/IP10; the report was generated by the
+  CLI and not manually marked green.
 - `verify_starter_state.py` remains a pre-implementation scaffold check and is
   not applicable after the four integration tasks are implemented; the
   corresponding starter tests pass.
 
-Remaining production gaps are immutable image digests, full dependency
-deployment in Kubernetes, production secret management/TLS/authentication,
-backup/restore and capacity evidence for real inference, the real GPU vLLM
-gate, and external LangSmith.
+Remaining external/production gaps are immutable image digests, full
+dependency deployment in Kubernetes, production secret management/TLS/
+authentication, backup/restore and real-inference capacity benchmarking, and
+external LangSmith.
 
 ## Contribution
 
-This is an individual submission by Vu Van Phong. Runtime fixes were limited to
-the Windows-safe CLI stdout boundary, bounded gateway 429 backoff for the
-operator seed batch, and control-plane synchronization after dependency
-recovery. No secret, `.env`, database, cache, model weight or `.lab28/` runtime
-state is intended for commit.
+This is an individual submission by Vu Van Phong. Runtime fixes include the
+Compose bearer-key interpolation, Envoy remote-readiness timeout/recovery
+settings, immediate trace-pipeline export for the real proxy boundary, and
+the load helper's HTTPError handling. The transparent proxy itself remains
+runtime-only under ignored `.lab28/`. No secret, `.env`, database, cache, model
+weight or `.lab28/` runtime state is intended for commit.
